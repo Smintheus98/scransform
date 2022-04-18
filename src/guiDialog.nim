@@ -42,7 +42,7 @@ proc showGui*(monitors: seq[string]; wname: string = "Transform"): Setting =
       setting.action = it
       setting.monitor = comboBoxes[0].value
       echo comboBoxes[1].value
-      setting.absolute = comboBoxes[1].value == "Absolute"
+      setting.absolute = comboBoxes[1].value == comboBoxLabels[1][1]
       app.quit
   )
   for i, button in buttons:
