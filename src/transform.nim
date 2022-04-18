@@ -1,4 +1,5 @@
 import std / [osproc, strutils, strformat, sequtils, parseopt, options]
+import guiDialog
 
 type
   TState = enum
@@ -28,7 +29,20 @@ let
 
 
 proc printUsage() =
-  discard
+  echo """ transform - Screen and pointer rotation tool
+Usage:
+    transform [OPTIONS]
+Options:
+    -h, --help              Shows this help menu
+    -g, --get               Returns current rotation
+    -u, --gui               Opens GUI-dialog
+    -d, --reset-default     Resets default configuration
+    -r, --relative=ROT      Rotates screen relatively to current rotation
+                            with ROT in {normal, left, inverted, right}
+    -a, --absolute=ROT      Applys absolute screen rotation
+    -m, --monitor           Set specific monitor
+                            if not set the main monitor is rotated
+"""
 
 proc errorMsg(msg: string) {.inline.} =
   stderr.writeLine(fmt"ERROR: {msg}")
@@ -42,8 +56,8 @@ proc getXrandrQuery(): seq[string] =
   execProcess("xrandr", args = ["--query"], options = {poUsePath}).strip.splitLines
 
 proc getXrandrMonitors(): seq[string] =
-  let odevs = execProcess("xrandr", args = ["--listmonitors"], options = {poUsePath}).strip.splitLines[1..^1].mapIt(it.split()[^1])
-  if odevs.len == 0:
+  result = execProcess("xrandr", args = ["--listmonitors"], options = {poUsePath}).strip.splitLines[1..^1].mapIt(it.split()[^1])
+  if result.len == 0:
     errorQuit("No monitors found!")
 
 proc setXrandrRotation(dev: OutputDevice = "eDP1"; tstate: TState): int {.discardable.} =
@@ -60,7 +74,7 @@ proc getXinputListPointers(): seq[string] =
   return getXinputListNames()[0..<pointerCount]
 
 proc setXinputRotation(dev: InputDevice; tstate: TState): int {.discardable.} =
-  execCmd(fmt"xinput set-prop '$#' 'Coordinate Transformation Matrix' {tMatrix[tstate]}" % [dev, tMatrix[tstate].join(" ")])
+  execCmd(fmt"xinput set-prop '$#' 'Coordinate Transformation Matrix' $#" % [dev, tMatrix[tstate].join(" ")])
 
 proc getRotState(dev: OutputDevice = "eDP1"): TState =
   let query = getXrandrQuery()
@@ -82,11 +96,22 @@ proc shiftRotState(start, by: TState): TState =
 
 proc relToAbsRot(odev: OutputDevice; relRot: TState): TState =
   return shiftRotState(getRotState(odev), relRot)
-  
+
 proc askRotGui(): TState =
-  #RelTransformation = enum
-  #  keep, left, invert, right, reset
-  discard
+  var setting = showGui(getXrandrMonitors())
+  let rotstate = getRotState(setting.monitor)
+  case setting.action:
+    of "Keep":
+      return rotstate
+    of "Left", "Inverted", "Right":
+      var rot = parseEnum[TState](setting.action.toLower)
+      if setting.absolute:
+        return rot
+      else:
+        return shiftRotState(rotstate, rot)
+    of "Reset":
+      return normal
+    else: discard
 
 
 proc trySetMode(res: var CmdLineParsing; mode: Mode) {.inline.} =
@@ -106,13 +131,16 @@ proc trySetTstate(res: var CmdLineParsing; val, optname: string) {.inline.} =
 
 proc parseCmdLine(): CmdLineParsing  =
   ## Parsing and formal check (no content check)
-  var parser = initOptParser(shortNoVal = {'g', 'd', 'u'}, longNoVal = @["get", "reset-default", "gui"])
+  var parser = initOptParser(shortNoVal = {'g', 'd', 'u', 'h'}, longNoVal = @["get", "reset-default", "gui", "help"])
 
   for kind, key, val in parser.getopt():
     case kind:
       of cmdShortOption, cmdLongOption:
         let optname = (if kind == cmdShortOption: "-" else: "--") & key
         case key:
+          of "h", "help":
+            printUsage()
+            quit QuitSuccess
           of "g", "get":
             result.trySetMode(get)
           of "u", "gui":
@@ -175,9 +203,7 @@ proc interpretParsedCmdLine(parsing: CmdLineParsing) =
       tstate = relToAbsRot(odev, tstate)
     of absolute:
       tstate = tstate
-    else:
-      discard
-      
+
   setRotState(odev, idevs, tstate)
 
 
