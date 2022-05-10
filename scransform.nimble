@@ -6,7 +6,7 @@ description   = "Desktop and pointing device transformer"
 license       = "GPL-3.0-or-later"
 srcDir        = "src"
 binDir        = "bin"
-bin           = @["transform"]
+bin           = @["scransform"]
 
 
 # Dependencies

@@ -7,7 +7,7 @@ type Setting* = tuple
   absolute: bool
 
 
-proc showGui*(monitors: seq[string]; wname: string = "Transform"): Setting =
+proc showGui*(monitors: seq[string]; wname: string = "Scransform"): Setting =
   app.init()
   var setting: Setting
   if monitors.len() <= 0:

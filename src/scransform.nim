@@ -4,8 +4,6 @@ import guiDialog
 type
   TState = enum
     normal, left, inverted, right
-#  Reference = enum
-#    relative, absolute
   Mode = enum
     get, gui, reset, relative, absolute
 
@@ -14,13 +12,14 @@ type
   OutputDevice = Device
 
   CmdLineParsing = tuple
+    ## Type to set by command line parser
     mode: Option[Mode]
     tstate: Option[TState]
     odev: Option[OutputDevice]
 
 
 let
-  tMatrix: array[TState, array[9, int]] = [
+  tMatrix: array[TState, array[9, int]] = [     ## Pointer rotation Matrix
     [ 1,  0,  0,  0,  1,  0,  0,  0,  1],
     [ 0, -1,  1,  1,  0,  0,  0,  0,  1],
     [-1,  0,  1,  0, -1,  1,  0,  0,  1],
@@ -29,7 +28,8 @@ let
 
 
 proc printUsage() =
-  echo """ transform - Screen and pointer rotation tool
+  ## Procedure to print the help message
+  echo """ scransform - Screen and pointer rotation tool
 Usage:
     transform [OPTIONS]
 Options:
@@ -45,35 +45,44 @@ Options:
 """
 
 proc errorMsg(msg: string) {.inline.} =
+  ## Wrapper for printing error messages
   stderr.writeLine(fmt"ERROR: {msg}")
 
 proc errorQuit(msg: string) {.inline.} =
+  ## Wrapper for printing error messages and exiting
   errorMsg(msg)
   quit QuitFailure
 
 
 proc getXrandrQuery(): seq[string] =
+  ## System call to XrandR to get the default query
   execProcess("xrandr", args = ["--query"], options = {poUsePath}).strip.splitLines
 
-proc getXrandrMonitors(): seq[string] =
+proc getXrandrMonitors(): seq[OutputDevice] =
+  ## Extracts Monitor names from XrandR system call
   result = execProcess("xrandr", args = ["--listmonitors"], options = {poUsePath}).strip.splitLines[1..^1].mapIt(it.split()[^1])
   if result.len == 0:
     errorQuit("No monitors found!")
 
 proc setXrandrRotation(dev: OutputDevice = "eDP1"; tstate: TState): int {.discardable.} =
+  ## System call to XrandR to set monitor rotation
   execCmd("xrandr --output '$#' --rotate $#" % [dev, $tstate])
 
 proc getXinputList(): seq[string] =
+  ## System call to Xorg-xinput to list input devices
   execProcess("xinput", args = ["list"], options = {poUsePath}).strip.splitLines
 
-proc getXinputListNames(): seq[string] =
+proc getXinputListNames(): seq[InputDevice] =
+  ## System call to Xorg-xinput to list input devices by names only
   execProcess("xinput", args = ["list", "--name-only"], options = {poUsePath}).strip.splitLines
 
-proc getXinputListPointers(): seq[string] =
+proc getXinputListPointers(): seq[InputDevice] =
+  ## Extract input device names that ar pointing devices
   let pointerCount = getXinputList().countIt("pointer" in it)
   return getXinputListNames()[0..<pointerCount]
 
 proc setXinputRotation(dev: InputDevice; tstate: TState): int {.discardable.} =
+  ## System call to set the coordinate transform matrix of the given input device
   execCmd(fmt"xinput set-prop '$#' 'Coordinate Transformation Matrix' $#" % [dev, tMatrix[tstate].join(" ")])
 
 proc getRotState(dev: OutputDevice = "eDP1"): TState =
